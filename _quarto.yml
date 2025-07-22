@@ -1,0 +1,70 @@
+project:
+  type: website
+  output-dir: _site
+    
+highlight-style: a11y
+lang: de
+language: 
+  title-block-author-single: "Author"
+  title-block-published: "Veröffentlicht"
+
+website:
+  title: "Quarto"
+  # image: "quarto-dark-bg.jpeg"
+  # site-url: https://quarto.org
+  # repo-url: https://github.com/quarto-dev/quarto-web
+  page-navigation: true
+  bread-crumbs: true
+
+  navbar:
+    background: light
+    # logo: quarto.png
+    title: false
+    collapse-below: lg
+    left:
+      - text: "mySite"
+        href: index.qmd
+      - text: "Projekte"
+        href: projekte/index.qmd
+      - text: "Blog"
+        href: blog/index.qmd
+      - text: "About"
+        href: about/about.qmd
+
+    tools:
+      - icon: github
+        href: https://github.com/quarto-dev/quarto-cli
+        text: myGitHub
+
+  sidebar:
+    - id: projekte
+      collapse-level: 2
+      contents:
+        - section: "Projekte"
+          href: projekte/index.qmd
+          contents:
+            - projekte/projekt1/projekt1.qmd
+            - projekte/projekt2/projekt2.qmd
+
+
+format:
+  html:
+    respect-user-color-scheme: true
+    toc: true
+    theme:
+      #light: [cosmo]
+      light: yeti
+      dark: [cosmo]
+    code-copy: true
+    code-overflow: wrap
+    # css: styles.css
+    # include-after-body: js.html
+    grid:
+      sidebar-width: 250px
+      body-width: 900px
+      margin-width: 300px
+
+
+
+
+freeze: true

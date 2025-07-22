@@ -1,0 +1,764 @@
+---
+title: "Meine erste Programmiererfahrung mit KI"
+author: "Andreas Siemens"
+date: "2025-05-28"
+date-modified: "2025-07-22"
+categories: [ki]
+#callout-icon: true
+image: thumbnail.jpg
+execute:
+  eval: false
+---
+
+## Allgemein
+
+Der Hype um die Künstliche Intelligenz war groß und es wurden große Versprechen gemacht, insbesondere was die Produktivitätssteigerung im Bereich Softwareentwicklung betrifft. Jetzt, da langsam die Realität Einzug hält und eine gewisse Ernüchterung eintritt, ist für mich eine gute Gelegenheit, sich selber eine Meinung darüber zu bilden.
+
+## Aufgabenstellung
+
+Für den Test habe ich eine einfache Aufgabenstellung aus meinem Berufsalltag gewählt. Am Ende einer jeden Arbeitswoche muss ich die digital erfassten Arbeitszeiten auf meine vorhandenen Projekte aufteilen. Da in der Übersicht die Gesamtanzahl der geleisteten Stunden pro Tag nich ausgewiesen wird, muss ich sie manuell berechnen, die Mittagspause abziehen und evtl. längere Pausen berücksichtigen.
+
+Das lässt sich aber auch teilweise automatisieren und somit waren meine Anforderungen an ein Automatisierungsscript schnell formuliert:
+
+- Extraktion der Kommt- und Geht-Buchungen aus einer gespeicherten HTML-Datei
+- Berechnen der Arbeitszeit pro Tag anhand der Kommt- und Geht-Buchungen in der digitalen Zeiterfassung
+- Subtrahieren der Mittagspause abhängig von der geleisteten Gesamtarbeitszeit:
+    - 0 Min. für Arbeitszeit <6h
+    - 30 Min für Arbeitszeit <9h
+    - 45 Min. für Arbeitszeit >9h
+- Berücksichtigung von längeren Pause aufgrund Arbeitsunterbrechung
+- Das Script sollte in Python geschrieben sein
+
+Los geht's.
+
+## Chat mit ChatGPT
+
+::: {.callout-note title="Ich"}
+Du bist ein Experte im Analysieren von HTML-Seiten mittels Python.  Ich möchte aus einer gespeicherten HTML-Seite meine digital erfassten Arbeitszeiten extrahieren. Die Arbeitszeiten befinden in einer einzigen Zeile in der HTML-Datei, die das Wort "Auswahlkriterien" enthält. Erstelle mir in einem ersten Schritt ein Python Script, das mir diese Zeile extrahiert. 
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Natürlich! Hier ist ein einfaches Python-Skript, das eine lokale HTML-Datei einliest und die Zeile extrahiert, die das Wort "Auswahlkriterien" enthält:
+
+```{python}
+#| code-line-numbers: true
+# Datei: extract_line_with_keyword.py
+
+def extract_line_with_keyword(file_path, keyword="Auswahlkriterien"):
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if keyword in line:
+                return line.strip()
+    return None
+
+# Beispielnutzung
+if __name__ == "__main__":
+    html_datei = "deine_datei.html"  # Pfad zur HTML-Datei anpassen
+    zeile = extract_line_with_keyword(html_datei)
+    if zeile:
+        print("Gefundene Zeile:")
+        print(zeile)
+    else:
+        print("Keine Zeile mit dem Stichwort gefunden.")
+```
+
+**Was du tun musst:**
+
+- Speichere das Skript z. B. als extract_line_with_keyword.py.
+- Ersetze deine_datei.html durch den Pfad deiner gespeicherten HTML-Datei.
+- Führe das Skript aus (z. B. mit python extract_line_with_keyword.py).
+
+Möchtest du die gefundene Zeile danach auch direkt weiter analysieren (z. B. nach Uhrzeiten oder Datumswerten)?
+:::
+
+Das hat schon mal gut funktioniert. Weiter geht es mit der Extraktion der Stundenbuchungen:
+
+::: {.callout-note title="Ich"}
+Die gefundene Zeile enthält neben zahlreichen HTML-Elementen auch Datumswerte und Uhrzeiten, die ich extrahieren möchte. Die Struktur sieht für jeden Arbeitstag wie folgt aus: Zuerst kommt das Schlüsselwert "Kommt" gefolgt von einem Datumswert und einer Uhrzeit. Das ist der Beginn meiner Arbeit. Danach folgt das Schlüsselwort "Geht" gefolgt von einem Datumswert und einer Uhrzeit. Das ist das Ende meiner Arbeitszeit. Erweitere das Python Script so, dass für alle vorhandenen Tage die Arbeistzeiten extrahiert und in einer Tabelle gespeichert werden. 
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Danke für die Beschreibung! Basierend darauf erweitere ich dein Python-Skript so, dass es:
+
+- Die Zeile mit dem Wort „Auswahlkriterien“ findet.
+- Alle Kommt/Geht-Paare mit Datum und Uhrzeit extrahiert.
+- Die Daten in eine strukturierte Tabelle (z. B. CSV-Datei) schreibt.
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+import re
+import csv
+
+def extract_line_with_keyword(file_path, keyword="Auswahlkriterien"):
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if keyword in line:
+                return line.strip()
+    return None
+
+def extract_work_times(line):
+    # Muster: Kommt, dann Datum + Uhrzeit; danach Geht mit Datum + Uhrzeit
+    pattern = re.compile(
+        r'Kommt.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2}).*?Geht.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2})',
+        re.DOTALL
+    )
+    matches = pattern.findall(line)
+
+    # Ergebnisse als Liste von Dictionaries
+    work_times = []
+    for kommt_datum, kommt_zeit, geht_datum, geht_zeit in matches:
+        work_times.append({
+            "Kommt_Datum": kommt_datum,
+            "Kommt_Uhrzeit": kommt_zeit,
+            "Geht_Datum": geht_datum,
+            "Geht_Uhrzeit": geht_zeit
+        })
+
+    return work_times
+
+def write_to_csv(data, output_path="arbeitszeiten.csv"):
+    if not data:
+        print("Keine Daten zum Schreiben gefunden.")
+        return
+
+    with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = data[0].keys()
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+
+    print(f"Arbeitszeiten erfolgreich in '{output_path}' gespeichert.")
+
+# Hauptprogramm
+if __name__ == "__main__":
+    html_datei = "deine_datei.html"  # Anpassen!
+    zeile = extract_line_with_keyword(html_datei)
+    if zeile:
+        arbeitszeiten = extract_work_times(zeile)
+        write_to_csv(arbeitszeiten)
+    else:
+        print("Keine Zeile mit dem Stichwort gefunden.")
+```
+
+**Ergebnis**
+
+Das Skript erstellt eine CSV-Datei namens arbeitszeiten.csv mit Spalten wie:
+
+| Kommt\_Datum | Kommt\_Uhrzeit | Geht\_Datum | Geht\_Uhrzeit |
+| ------------ | -------------- | ----------- | ------------- |
+| 01.04.2025   | 08:00          | 01.04.2025  | 16:30         |
+
+Möchtest du zusätzlich die gearbeiteten Stunden pro Tag berechnen und in die Tabelle einfügen?
+:::
+
+::: {.callout-note title="Ich"}
+Ja, erweitere das Script so, dass zusätzlich die gearbeitete Stunden pro Tag berechnet werden. Subtrahiere für jeden Tag die Zeit für die Mittagspause nach folgenden Regeln: Wenn die Arbeitszeit pro Tag weniger als 6 Stunden beträgt, dann subtrahiere keine Mittagspause. Wenn die Arbeitszeit pro Tag größer als 6 Stunden und weniger als 9 Stunden beträgt, dann subtrahiere 30 Minuten. Wenn die Arbeitszeit pro Tag mehr als 9 Stunden beträgt, dann subtrahiere 45 Minuten. 
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Perfekt, hier ist die erweiterte Version des Skripts, das zusätzlich:
+
+- die Dauer der Arbeitszeit pro Tag berechnet,
+- die Mittagspause gemäß deiner Regeln abzieht,
+- und das Ergebnis in Stunden als neue Spalte Gearbeitete_Stunden in die CSV schreibt.
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+import re
+import csv
+from datetime import datetime, timedelta
+
+def extract_line_with_keyword(file_path, keyword="Auswahlkriterien"):
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if keyword in line:
+                return line.strip()
+    return None
+
+def extract_work_times(line):
+    # Regex: Kommt -> Datum + Uhrzeit, Geht -> Datum + Uhrzeit
+    pattern = re.compile(
+        r'Kommt.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2}).*?Geht.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2})',
+        re.DOTALL
+    )
+    matches = pattern.findall(line)
+
+    work_times = []
+    for kommt_datum, kommt_zeit, geht_datum, geht_zeit in matches:
+        kommt_dt = datetime.strptime(f"{kommt_datum} {kommt_zeit}", "%d.%m.%Y %H:%M")
+        geht_dt = datetime.strptime(f"{geht_datum} {geht_zeit}", "%d.%m.%Y %H:%M")
+
+        # Rohdauer
+        arbeitsdauer = geht_dt - kommt_dt
+
+        # Mittagspause-Regeln
+        if arbeitsdauer < timedelta(hours=6):
+            pause = timedelta(minutes=0)
+        elif arbeitsdauer < timedelta(hours=9):
+            pause = timedelta(minutes=30)
+        else:
+            pause = timedelta(minutes=45)
+
+        gearbeitete_dauer = arbeitsdauer - pause
+        gearbeitete_stunden = round(gearbeitete_dauer.total_seconds() / 3600, 2)
+
+        work_times.append({
+            "Kommt_Datum": kommt_datum,
+            "Kommt_Uhrzeit": kommt_zeit,
+            "Geht_Datum": geht_datum,
+            "Geht_Uhrzeit": geht_zeit,
+            "Gearbeitete_Stunden": gearbeitete_stunden
+        })
+
+    return work_times
+
+def write_to_csv(data, output_path="arbeitszeiten.csv"):
+    if not data:
+        print("Keine Daten zum Schreiben gefunden.")
+        return
+
+    with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = data[0].keys()
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+
+    print(f"Arbeitszeiten mit Pausenberechnung in '{output_path}' gespeichert.")
+
+# Hauptprogramm
+if __name__ == "__main__":
+    html_datei = "deine_datei.html"  # Pfad anpassen
+    zeile = extract_line_with_keyword(html_datei)
+    if zeile:
+        arbeitszeiten = extract_work_times(zeile)
+        write_to_csv(arbeitszeiten)
+    else:
+        print("Keine Zeile mit dem Stichwort gefunden.")
+```
+
+**Die Ausgabe-CSV enthält jetzt:**
+
+| Kommt\_Datum | Kommt\_Uhrzeit | Geht\_Datum | Geht\_Uhrzeit | Gearbeitete\_Stunden |
+| ------------ | -------------- | ----------- | ------------- | -------------------- |
+| 01.04.2025   | 08:00          | 01.04.2025  | 16:30         | 8.0                  |
+
+Möchtest du zusätzlich die Daten als Excel-Datei (.xlsx) speichern oder visualisieren (z. B. Diagramm der gearbeiteten Stunden pro Tag)?
+:::
+
+::: {.callout-note title="Ich"}
+Visualisiere mir die gearbeiteten Stunden pro Tag zusätzlich als Diagramm. 
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Sehr gut! Hier ist die erweiterte Version des Skripts, das zusätzlich zu allem bisher Gesagten:
+
+- ein Balkendiagramm der gearbeiteten Stunden pro Tag erstellt,
+- die Grafik mit Matplotlib rendert und als PNG-Datei speichert.
+
+**Zusätzliche Abhängigkeit**
+
+Installiere ggf. Matplotlib, falls noch nicht vorhanden:
+
+```bash
+pip install matplotlib
+```
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+import re
+import csv
+from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+
+def extract_line_with_keyword(file_path, keyword="Auswahlkriterien"):
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if keyword in line:
+                return line.strip()
+    return None
+
+def extract_work_times(line):
+    pattern = re.compile(
+        r'Kommt.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2}).*?Geht.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2})',
+        re.DOTALL
+    )
+    matches = pattern.findall(line)
+
+    work_times = []
+    for kommt_datum, kommt_zeit, geht_datum, geht_zeit in matches:
+        kommt_dt = datetime.strptime(f"{kommt_datum} {kommt_zeit}", "%d.%m.%Y %H:%M")
+        geht_dt = datetime.strptime(f"{geht_datum} {geht_zeit}", "%d.%m.%Y %H:%M")
+        arbeitsdauer = geht_dt - kommt_dt
+
+        if arbeitsdauer < timedelta(hours=6):
+            pause = timedelta(minutes=0)
+        elif arbeitsdauer < timedelta(hours=9):
+            pause = timedelta(minutes=30)
+        else:
+            pause = timedelta(minutes=45)
+
+        gearbeitete_dauer = arbeitsdauer - pause
+        gearbeitete_stunden = round(gearbeitete_dauer.total_seconds() / 3600, 2)
+
+        work_times.append({
+            "Kommt_Datum": kommt_datum,
+            "Kommt_Uhrzeit": kommt_zeit,
+            "Geht_Datum": geht_datum,
+            "Geht_Uhrzeit": geht_zeit,
+            "Gearbeitete_Stunden": gearbeitete_stunden
+        })
+
+    return work_times
+
+def write_to_csv(data, output_path="arbeitszeiten.csv"):
+    if not data:
+        print("Keine Daten zum Schreiben gefunden.")
+        return
+
+    with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = data[0].keys()
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+
+    print(f"CSV-Datei '{output_path}' wurde erfolgreich erstellt.")
+
+def plot_work_hours(data, output_image="arbeitszeiten_diagramm.png"):
+    daten = [row["Kommt_Datum"] for row in data]
+    stunden = [row["Gearbeitete_Stunden"] for row in data]
+
+    plt.figure(figsize=(10, 5))
+    plt.bar(daten, stunden, color='skyblue')
+    plt.xlabel("Datum")
+    plt.ylabel("Gearbeitete Stunden")
+    plt.title("Gearbeitete Stunden pro Tag (nach Abzug der Pause)")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(output_image)
+    plt.close()
+    print(f"Diagramm als '{output_image}' gespeichert.")
+
+# Hauptprogramm
+if __name__ == "__main__":
+    html_datei = "deine_datei.html"  # Pfad zur HTML-Datei
+    zeile = extract_line_with_keyword(html_datei)
+    if zeile:
+        arbeitszeiten = extract_work_times(zeile)
+        write_to_csv(arbeitszeiten)
+        plot_work_hours(arbeitszeiten)
+    else:
+        print("Keine Zeile mit dem Stichwort gefunden.")
+```
+
+**Ausgabe**
+
+- CSV-Datei: arbeitszeiten.csv
+- Diagramm-Datei: arbeitszeiten_diagramm.png (Balkendiagramm der gearbeiteten Stunden)
+
+Möchtest du das Diagramm auch gleich in einem PDF-Bericht einbetten oder nur als Bild verwenden?
+:::
+
+::: {.callout-note title="Ich"}
+Stelle das Balkendiagramm waagerecht dar und beschrifte jeden Balken mit dem dazugehörigen Wert
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Klar! Um das Balkendiagramm waagerecht darzustellen (also mit horizontalen Balken) und jeden Balken mit dem gearbeiteten Stundenwert zu beschriften, passen wir die plot_work_hours()-Funktion entsprechend an:
+
+**Angepasste plot_work_hours()-Funktion:**
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+def plot_work_hours(data, output_image="arbeitszeiten_diagramm.png"):
+    daten = [row["Kommt_Datum"] for row in data]
+    stunden = [row["Gearbeitete_Stunden"] for row in data]
+
+    plt.figure(figsize=(10, 6))
+    bars = plt.barh(daten, stunden, color='skyblue')
+    plt.xlabel("Gearbeitete Stunden")
+    plt.ylabel("Datum")
+    plt.title("Gearbeitete Stunden pro Tag (nach Abzug der Pause)")
+
+    # Beschriftung der Balken mit den Werten
+    for bar, wert in zip(bars, stunden):
+        plt.text(wert + 0.1, bar.get_y() + bar.get_height() / 2, f"{wert:.2f}", va='center')
+
+    plt.tight_layout()
+    plt.savefig(output_image)
+    plt.close()
+    print(f"Waagerechtes Diagramm mit Beschriftung als '{output_image}' gespeichert.")
+```
+
+**Änderungen:**
+
+- plt.barh() statt plt.bar() für horizontal.
+- plt.text(...) setzt den Zahlenwert ans Ende jedes Balkens.
+
+Alles andere im Skript bleibt gleich – du kannst diese Funktion einfach austauschen und das Diagramm wird entsprechend aktualisiert.
+
+Möchtest du zusätzlich Farben je nach Stundenanzahl (z. B. <6 grün, 6–9 gelb, >9 rot) einbauen?
+:::
+
+::: {.callout-note title="Ich"}
+Ändere die Formatierung der Zeiten in Stunden und Minuten
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Gerne! Um die gearbeiteten Zeiten nicht als Dezimalwert (z. B. 8.5 Stunden), sondern im Format hh:mm (z. B. 8:30) darzustellen, passen wir Folgendes an:
+
+**Änderungen:**
+
+- Berechne die gearbeitete Zeit weiterhin als timedelta.
+- Konvertiere sie in ein hh:mm-Format.
+- Zeige die Zeiten auch im Diagramm als hh:mm an.
+
+**Geänderte extract_work_times()-Funktion:**
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+def extract_work_times(line):
+    pattern = re.compile(
+        r'Kommt.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2}).*?Geht.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2})',
+        re.DOTALL
+    )
+    matches = pattern.findall(line)
+
+    work_times = []
+    for kommt_datum, kommt_zeit, geht_datum, geht_zeit in matches:
+        kommt_dt = datetime.strptime(f"{kommt_datum} {kommt_zeit}", "%d.%m.%Y %H:%M")
+        geht_dt = datetime.strptime(f"{geht_datum} {geht_zeit}", "%d.%m.%Y %H:%M")
+        arbeitsdauer = geht_dt - kommt_dt
+
+        if arbeitsdauer < timedelta(hours=6):
+            pause = timedelta(minutes=0)
+        elif arbeitsdauer < timedelta(hours=9):
+            pause = timedelta(minutes=30)
+        else:
+            pause = timedelta(minutes=45)
+
+        gearbeitete_dauer = arbeitsdauer - pause
+
+        # Format als hh:mm
+        total_minutes = int(gearbeitete_dauer.total_seconds() // 60)
+        hours, minutes = divmod(total_minutes, 60)
+        gearbeitete_str = f"{hours}:{minutes:02d}"
+
+        work_times.append({
+            "Kommt_Datum": kommt_datum,
+            "Kommt_Uhrzeit": kommt_zeit,
+            "Geht_Datum": geht_datum,
+            "Geht_Uhrzeit": geht_zeit,
+            "Gearbeitete_Zeit": gearbeitete_str,
+            "Gearbeitete_Dauer": gearbeitete_dauer  # bleibt zur Diagrammerstellung intern
+        })
+
+    return work_times
+```
+
+**Geänderte plot_work_hours()-Funktion (mit hh:mm-Labels):**
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+def plot_work_hours(data, output_image="arbeitszeiten_diagramm.png"):
+    daten = [row["Kommt_Datum"] for row in data]
+    stunden = [row["Gearbeitete_Dauer"].total_seconds() / 3600 for row in data]  # float für Balkenlänge
+    labels = [row["Gearbeitete_Zeit"] for row in data]
+
+    plt.figure(figsize=(10, 6))
+    bars = plt.barh(daten, stunden, color='skyblue')
+    plt.xlabel("Gearbeitete Zeit (hh:mm)")
+    plt.ylabel("Datum")
+    plt.title("Gearbeitete Stunden pro Tag (nach Abzug der Pause)")
+
+    # Text-Labels als hh:mm
+    for bar, label in zip(bars, labels):
+        plt.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2, label, va='center')
+
+    plt.tight_layout()
+    plt.savefig(output_image)
+    plt.close()
+    print(f"Diagramm mit Zeit im Format hh:mm als '{output_image}' gespeichert.")
+```
+
+**Ergebnis:**
+
+- In der CSV steht nun die gearbeitete Zeit als hh:mm (z. B. 8:30).
+- Im Diagramm werden Balken nach Dauer gezeichnet, aber mit Zeit-Labels im hh:mm-Format.
+
+Möchtest du zusätzlich die Balkenfarben dynamisch je nach Dauer einfärben (z. B. grün, gelb, rot)?
+:::
+
+::: {.callout-note title="Ich"}
+Ändere das Script so, dass die CSV-Datei und die Diagramm-Datei den gleichen Namen bekommen wie die HTML-Datei.
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Klar! Um sicherzustellen, dass sowohl die CSV-Datei als auch das Diagramm denselben Namen wie die HTML-Datei erhalten (nur mit anderer Dateiendung), passen wir das Skript wie folgt an:
+
+**Schritt-für-Schritt-Änderungen:**
+
+Wir extrahieren den Basisnamen der HTML-Datei (ohne Endung) und hängen .csv bzw. .png an.
+
+**Neue Fassung des Hauptprogramms:**
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+import os
+import re
+import csv
+from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+
+def extract_line_with_keyword(file_path, keyword="Auswahlkriterien"):
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if keyword in line:
+                return line.strip()
+    return None
+
+def extract_work_times(line):
+    pattern = re.compile(
+        r'Kommt.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2}).*?Geht.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2})',
+        re.DOTALL
+    )
+    matches = pattern.findall(line)
+
+    work_times = []
+    for kommt_datum, kommt_zeit, geht_datum, geht_zeit in matches:
+        kommt_dt = datetime.strptime(f"{kommt_datum} {kommt_zeit}", "%d.%m.%Y %H:%M")
+        geht_dt = datetime.strptime(f"{geht_datum} {geht_zeit}", "%d.%m.%Y %H:%M")
+        arbeitsdauer = geht_dt - kommt_dt
+
+        if arbeitsdauer < timedelta(hours=6):
+            pause = timedelta(minutes=0)
+        elif arbeitsdauer < timedelta(hours=9):
+            pause = timedelta(minutes=30)
+        else:
+            pause = timedelta(minutes=45)
+
+        gearbeitete_dauer = arbeitsdauer - pause
+
+        total_minutes = int(gearbeitete_dauer.total_seconds() // 60)
+        hours, minutes = divmod(total_minutes, 60)
+        gearbeitete_str = f"{hours}:{minutes:02d}"
+
+        work_times.append({
+            "Kommt_Datum": kommt_datum,
+            "Kommt_Uhrzeit": kommt_zeit,
+            "Geht_Datum": geht_datum,
+            "Geht_Uhrzeit": geht_zeit,
+            "Gearbeitete_Zeit": gearbeitete_str,
+            "Gearbeitete_Dauer": gearbeitete_dauer
+        })
+
+    return work_times
+
+def write_to_csv(data, output_path):
+    if not data:
+        print("Keine Daten zum Schreiben gefunden.")
+        return
+
+    with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = ["Kommt_Datum", "Kommt_Uhrzeit", "Geht_Datum", "Geht_Uhrzeit", "Gearbeitete_Zeit"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in data:
+            # Entferne das timedelta-Objekt für CSV-Ausgabe
+            csv_row = {k: row[k] for k in fieldnames}
+            writer.writerow(csv_row)
+
+    print(f"CSV-Datei '{output_path}' wurde erfolgreich erstellt.")
+
+def plot_work_hours(data, output_image):
+    daten = [row["Kommt_Datum"] for row in data]
+    stunden = [row["Gearbeitete_Dauer"].total_seconds() / 3600 for row in data]
+    labels = [row["Gearbeitete_Zeit"] for row in data]
+
+    plt.figure(figsize=(10, 6))
+    bars = plt.barh(daten, stunden, color='skyblue')
+    plt.xlabel("Gearbeitete Zeit (hh:mm)")
+    plt.ylabel("Datum")
+    plt.title("Gearbeitete Stunden pro Tag (nach Abzug der Pause)")
+
+    for bar, label in zip(bars, labels):
+        plt.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2, label, va='center')
+
+    plt.tight_layout()
+    plt.savefig(output_image)
+    plt.close()
+    print(f"Diagramm gespeichert als '{output_image}'.")
+
+# Hauptprogramm
+if __name__ == "__main__":
+    html_datei = "deine_datei.html"  # HTML-Datei anpassen
+
+    basisname = os.path.splitext(os.path.basename(html_datei))[0]
+    csv_datei = f"{basisname}.csv"
+    diagramm_datei = f"{basisname}.png"
+
+    zeile = extract_line_with_keyword(html_datei)
+    if zeile:
+        arbeitszeiten = extract_work_times(zeile)
+        write_to_csv(arbeitszeiten, csv_datei)
+        plot_work_hours(arbeitszeiten, diagramm_datei)
+    else:
+        print("Keine Zeile mit dem Stichwort gefunden.")
+```
+
+**Ergebnis bei arbeitszeiten_april.html:**
+
+- arbeitszeiten_april.csv
+- arbeitszeiten_april.png
+
+Möchtest du den Speicherort der Dateien separat angeben oder alles im selben Ordner wie die HTML-Datei lassen?
+:::
+
+::: {.callout-note title="Ich"}
+Berücksichtige bei dem Script, dass die Arbeitszeit durch eine längere Pause unterbrochen werden kann und es in diesem Fall eine doppelte Kommt-Geht Buchung gibt. Berechne in so einem Fall die beiden Arbeitszeiten getrennt voneinander und addiere sie anschließend.
+:::
+
+::: {.callout-tip title="ChatGPT"}
+Gute Anforderung! Wenn an einem Tag mehrere Kommt–Geht-Paare vorkommen (z. B. wegen einer langen Pause), müssen diese zeitlich zusammengehören und auf den gleichen Tag aggregiert werden.
+
+**Ziel:**
+
+- Finde alle Kommt–Geht-Blöcke, auch wenn mehrere pro Tag vorhanden sind.
+- Fasse alle Kommt–Geht-Zeitpaare pro Tag zusammen.
+- Wende die Pausenregel auf die Gesamtdauer pro Tag an.
+
+**Neue Logik in extract_work_times():**
+
+Wir gruppieren nach Datum und summieren dort die einzelnen Kommt–Geht-Zeiträume.
+
+**Ersetze die alte extract_work_times()-Funktion durch diese:**
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+from collections import defaultdict
+
+def extract_work_times(line):
+    pattern = re.compile(
+        r'Kommt.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2}).*?Geht.*?(\d{2}\.\d{2}\.\d{4}).*?(\d{2}:\d{2})',
+        re.DOTALL
+    )
+    matches = pattern.findall(line)
+
+    tage = defaultdict(list)  # {Datum: [timedelta1, timedelta2, ...]}
+
+    for kommt_datum, kommt_zeit, geht_datum, geht_zeit in matches:
+        if kommt_datum != geht_datum:
+            print(f"Achtung: Kommt-Datum ({kommt_datum}) ungleich Geht-Datum ({geht_datum}) – wird ignoriert.")
+            continue
+
+        kommt_dt = datetime.strptime(f"{kommt_datum} {kommt_zeit}", "%d.%m.%Y %H:%M")
+        geht_dt = datetime.strptime(f"{geht_datum} {geht_zeit}", "%d.%m.%Y %H:%M")
+        dauer = geht_dt - kommt_dt
+
+        tage[kommt_datum].append({
+            "Kommt": kommt_dt,
+            "Geht": geht_dt,
+            "Dauer": dauer
+        })
+
+    result = []
+    for datum, zeiten in tage.items():
+        gesamt_dauer = sum((z["Dauer"] for z in zeiten), timedelta())
+
+        # Pausenregel
+        if gesamt_dauer < timedelta(hours=6):
+            pause = timedelta(minutes=0)
+        elif gesamt_dauer < timedelta(hours=9):
+            pause = timedelta(minutes=30)
+        else:
+            pause = timedelta(minutes=45)
+
+        netto_dauer = gesamt_dauer - pause
+        total_minutes = int(netto_dauer.total_seconds() // 60)
+        hours, minutes = divmod(total_minutes, 60)
+        gearbeitete_str = f"{hours}:{minutes:02d}"
+
+        # Für spätere Verwendung (CSV/Diagramm)
+        kommt_zeiten = ", ".join([z["Kommt"].strftime("%H:%M") for z in zeiten])
+        geht_zeiten = ", ".join([z["Geht"].strftime("%H:%M") for z in zeiten])
+
+        result.append({
+            "Datum": datum,
+            "Kommt_Uhrzeit(en)": kommt_zeiten,
+            "Geht_Uhrzeit(en)": geht_zeiten,
+            "Gearbeitete_Zeit": gearbeitete_str,
+            "Gearbeitete_Dauer": netto_dauer
+        })
+
+    return sorted(result, key=lambda x: datetime.strptime(x["Datum"], "%d.%m.%Y"))
+```
+
+**Und passe write_to_csv() entsprechend an:**
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+def write_to_csv(data, output_path):
+    if not data:
+        print("Keine Daten zum Schreiben gefunden.")
+        return
+
+    with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = ["Datum", "Kommt_Uhrzeit(en)", "Geht_Uhrzeit(en)", "Gearbeitete_Zeit"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in data:
+            csv_row = {k: row[k] for k in fieldnames}
+            writer.writerow(csv_row)
+
+    print(f"CSV-Datei '{output_path}' wurde erfolgreich erstellt.")
+```
+
+**Und das Diagramm verwendet row["Datum"]:**
+
+```{python}
+#| code-fold: true
+#| code-line-numbers: true
+def plot_work_hours(data, output_image):
+    daten = [row["Datum"] for row in data]
+    stunden = [row["Gearbeitete_Dauer"].total_seconds() / 3600 for row in data]
+    labels = [row["Gearbeitete_Zeit"] for row in data]
+
+    plt.figure(figsize=(10, 6))
+    bars = plt.barh(daten, stunden, color='skyblue')
+    plt.xlabel("Gearbeitete Zeit (hh:mm)")
+    plt.ylabel("Datum")
+    plt.title("Gearbeitete Stunden pro Tag (nach Abzug der Pause)")
+
+    for bar, label in zip(bars, labels):
+        plt.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2, label, va='center')
+
+    plt.tight_layout()
+    plt.savefig(output_image)
+    plt.close()
+    print(f"Diagramm gespeichert als '{output_image}'.")
+```
+
+**Ergebnis:**
+
+- Mehrere Kommt–Geht-Paare pro Tag werden korrekt berücksichtigt.
+- Es wird die tägliche Gesamtarbeitszeit berechnet.
+- Die Pause wird nur einmal pro Tag auf die Gesamtdauer angewendet.
+
+Möchtest du optional auch die tatsächliche Pausenzeit zwischen den Kommt–Geht-Blöcken ermitteln und separat ausgeben?
+:::
+
+An dieser Stelle breche ich ab, da ich jetzt ein funktionsfähiges Script habe, das alle meine Anforderungen erfüllt.
+
+## Fazit
+
+ChatGPT hat diese Aufgabe sehr gut gemeistert. Zugegeben: Es war eine einfache Aufgabenstellung, aber der Code funktionierte auf Anhieb. Erstaunlich war auch, dass ich zu keinem Zeitpunkt des Chats eine HTML-Beispielseite hochladen musste.
+
+Für diese Programmieraufage hätte ich mit meinen durchschnittlichen Python Kenntnissen gewiss ca. 3..4h gebraucht. Mit Hilfe von ChatGPT dauerte der ganze Vorgang weniger als 45 Min., in diesem Fall eine echte Produktivitätssteigerung.
